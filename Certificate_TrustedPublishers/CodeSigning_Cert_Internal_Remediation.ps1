@@ -1,5 +1,5 @@
 ﻿# === Define your certificate info ===
-$CertDownloadUrl = "https://xxxx.blob.core.windows.net/intunerepo/xxxxxCodeSigning_public.cer"  # Use full public or SAS URL
+$CertDownloadUrl = "https://xxxx.blob.core.windows.net/<blob name>/xxxxxCodeSigning_public.cer"  # Use full public or SAS URL
 $LocalCertPath = "$env:TEMP\xxxxxCodeSigning_public.cer"
 $ExpectedThumbprint = "xxxxxx"
 
