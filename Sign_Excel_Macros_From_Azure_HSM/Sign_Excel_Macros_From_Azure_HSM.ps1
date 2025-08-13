@@ -44,12 +44,10 @@ regsvr32 /s "$dest\msosip.dll"
 regsvr32 /s "$dest\msosipx.dll"
 
 # Install x64 SDK
-# winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x64 --force
-winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x64
+winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x64 --force
 
 # Install x86 SDK
-# winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x86 --force
-winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x86
+winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x86 --force
 
 # Install NuGet
 dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org
