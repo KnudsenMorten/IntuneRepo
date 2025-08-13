@@ -43,10 +43,10 @@ Start-Process -FilePath $tmp -ArgumentList "/extract:`"$dest`" /quiet" -Wait
 regsvr32 /s "$dest\msosip.dll"
 regsvr32 /s "$dest\msosipx.dll"
 
-# Install x64 SDK
+# Install x64 SDK (only first time)
 winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x64 --force
 
-# Install x86 SDK
+# Install x86 SDK (only first time)
 winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x86 --force
 
 # Install NuGet
