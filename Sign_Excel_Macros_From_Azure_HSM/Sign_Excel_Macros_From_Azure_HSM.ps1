@@ -1,16 +1,19 @@
-# Signing of Excel Macro files
-# Created by Morten Knudsen (aka.ms/morten)
+<#
+Signing of Excel Macro files using Azure Key Vault
+Runs AzureSignTool via dotnet tool run (x86) to avoid ASR block on user-profile EXEs
+Created by Morten Knudsen (aka.ms/morten) — Updated
+#>
 
 ################################################################################
 # VARIABLES
 ################################################################################
 
-# Details for Microsoft Office Subject Interface Packages for Digitally Signing VBA Projects
-$tmp = "$env:TEMP\officesips.exe"
-$url = "https://download.microsoft.com/download/f/b/4/fb46f8ca-6a6f-4cb0-b8f4-06bf3d44da48/officesips_16.0.16507.43425.exe"
+# Microsoft Office Subject Interface Packages (SIPs)
+$tmp  = "$env:TEMP\officesips.exe"
+$url  = "https://download.microsoft.com/download/f/b/4/fb46f8ca-6a6f-4cb0-b8f4-06bf3d44da48/officesips_16.0.16507.43425.exe"
 $dest = "C:\Program Files\Microsoft Office SIPs"
 
-# Details for Signing
+# Signing details
 $VaultUri = "https://<keyvault name>.vault.azure.net"
 $CertName = "<Keyvault certificate name>"     # KV certificate object name
 $TenantId = "<tenant id>"
@@ -19,66 +22,76 @@ $ClientSecret = "<App Secret>"
 $TimeStampUrl = "http://timestamp.globalsign.com/tsa/r6advanced1"  # or your TSA of choice
 $FileToSign = "<XLSM file>"
 
+# Use x86 dotnet host explicitly (important for Office SIP compatibility)
+$DotNetX86 = "C:\Program Files (x86)\dotnet\dotnet.exe"
+
+# Local tool workspace for dotnet tool manifest (so we can use `dotnet tool run`)
+$ToolWorkDir = Join-Path $env:TEMP "signing-tool-workdir"
+
 ################################################################################
-# STEP 1: INSTALLATION (ONE-TIME TASK)
+# PRE-CHECKS
 ################################################################################
 
-# Create folder C:\Program Files\Microsoft Office SIPs
-MD $dest -Force
+# Admin is required for regsvr32 and most installs
+$IsAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $IsAdmin) { throw "Please run PowerShell as Administrator." }
 
-# Install Microsoft Office Subject Interface Packages for Digitally Signing VBA Projects
-# https://www.microsoft.com/en-us/download/details.aspx?id=56617
-# This package (version 16.0.16507.43425, published July 15, 2024) is specifically for digitally signing and verifying VBA projects in Office files, and it doesnâ€™t require Office to be installed
-# Extract files to "C:\Program Files\Microsoft Office SIPs"
+# Unblock the macro file if it came from the internet
+Unblock-File -Path $FileToSign -ErrorAction SilentlyContinue
 
-Invoke-WebRequest -Uri $url -OutFile $tmp
+################################################################################
+# STEP 1: INSTALLATION (ONE-TIME)
+################################################################################
 
-# Download Microsoft Office Subject Interface Packages for Digitally Signing VBA Projects - and 
-# extact to "C:\Program Files\Microsoft Office SIPs"
-
+# Ensure SIPs are present and registered
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
+Invoke-WebRequest -Uri $url -OutFile $tmp
 Start-Process -FilePath $tmp -ArgumentList "/extract:`"$dest`" /quiet" -Wait
-
-# Register DLLs for Microsoft Office Subject Interface Packages for Digitally Signing VBA Projects
 regsvr32 /s "$dest\msosip.dll"
 regsvr32 /s "$dest\msosipx.dll"
 
-# Install x64 SDK (only first time)
-winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x64 --force
+# Ensure .NET SDKs (x64 + x86) are installed
+winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x64 --accept-package-agreements --accept-source-agreements
+winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x86 --accept-package-agreements --accept-source-agreements
 
-# Install x86 SDK (only first time)
-winget install --id Microsoft.DotNet.SDK.8 --source winget --architecture x86 --force
+# NuGet source (idempotent) – no -ErrorAction (dotnet nuget doesn't support it)
+try {
+  dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org 2>$null
+} catch {
+  # ignore if it already exists
+}
 
-# Install NuGet
-dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org
+# Prepare a local tool manifest so we can run "dotnet tool run AzureSignTool"
+New-Item -ItemType Directory -Force -Path $ToolWorkDir | Out-Null
+Push-Location $ToolWorkDir
+if (-not (Test-Path ".config\dotnet-tools.json")) {
+  & $DotNetX86 new tool-manifest | Out-Null
+}
 
-# Install AzureSignTool into the x86 tool cache (important for macro signing)
-& "C:\Program Files (x86)\dotnet\dotnet.exe" tool install --global AzureSignTool
+# Install (or update) AzureSignTool as a *local* tool into this workdir
+# Using x86 dotnet host ensures the tool runs in a 32-bit context
+try {
+  & $DotNetX86 tool install AzureSignTool | Out-Null
+} catch {
+  & $DotNetX86 tool update AzureSignTool | Out-Null
+}
 
 ################################################################################
-# STEP 2: SIGN FILE
-# Why multiple passes? The Office SIP readme/workflows expect successive signatures
-# to cover older and newer VBA signature schemes so Office can validate and, 
-# where applicable, show the signature as V3
+# STEP 2: SIGN FILE (3 PASSES)
 ################################################################################
 
-# --- SIGN PASS 1 (legacy) ---
-dotnet run -r win-x86 -- sign `
-  "$FileToSign" `
-  -kvu "$VaultUri" -kvc "$CertName" `
-  -kvt "$TenantId" -kvi "$ClientId" -kvs "$ClientSecret" `
-  -tr "$TimeStampUrl" -td sha256
+for ($i = 1; $i -le 3; $i++) {
+  Write-Host "Signing pass $i..." -ForegroundColor Cyan
+  & $DotNetX86 tool run AzureSignTool -- sign `
+    "$FileToSign" `
+    -kvu "$VaultUri" -kvc "$CertName" `
+    -kvt "$TenantId" -kvi "$ClientId" -kvs "$ClientSecret" `
+    -tr "$TimeStampUrl" -td sha256
+  if ($LASTEXITCODE -ne 0) {
+    throw "AzureSignTool failed on pass $i with exit code $LASTEXITCODE."
+  }
+}
 
-# --- SIGN PASS 2 (agile) ---
-dotnet run -r win-x86 -- sign `
-  "$FileToSign" `
-  -kvu "$VaultUri" -kvc "$CertName" `
-  -kvt "$TenantId" -kvi "$ClientId" -kvs "$ClientSecret" `
-  -tr "$TimeStampUrl" -td sha256
-
-# --- SIGN PASS 3 (V3) ---
-dotnet run -r win-x86 -- sign `
-  "$FileToSign" `
-  -kvu "$VaultUri" -kvc "$CertName" `
-  -kvt "$TenantId" -kvi "$ClientId" -kvs "$ClientSecret" `
-  -tr "$TimeStampUrl" -td sha256
+Pop-Location
+Write-Host "Signing completed successfully." -ForegroundColor Green
