@@ -1,7 +1,19 @@
 <#
+.SYNOPSIS
+    Sign_Excel_Macros_From_Azure_HSM - engine script in the IntuneRepo solution.
+
 Signing of Excel Macro files using Azure Key Vault
 Runs AzureSignTool via dotnet tool run (x86) to avoid ASR block on user-profile EXEs
 Created by Morten Knudsen (aka.ms/morten) — Updated
+
+.NOTES
+    Solution       : IntuneRepo
+    File           : Sign_Excel_Macros_From_Azure_HSM.ps1
+    Developed by   : Morten Knudsen, Microsoft MVP (Security, Azure, Security Copilot)
+    Blog           : https://mortenknudsen.net  (alias https://aka.ms/morten)
+    GitHub         : https://github.com/KnudsenMorten
+    Support        : For public repos, open a GitHub Issue on that solution's repo.
+
 #>
 
 ################################################################################

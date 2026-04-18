@@ -1,4 +1,17 @@
-﻿# === Define your certificate info ===
+<#
+.SYNOPSIS
+    CodeSigning_Cert_Internal_Remediation - engine script in the IntuneRepo solution.
+
+.NOTES
+    Solution       : IntuneRepo
+    File           : CodeSigning_Cert_Internal_Remediation.ps1
+    Developed by   : Morten Knudsen, Microsoft MVP (Security, Azure, Security Copilot)
+    Blog           : https://mortenknudsen.net  (alias https://aka.ms/morten)
+    GitHub         : https://github.com/KnudsenMorten
+    Support        : For public repos, open a GitHub Issue on that solution's repo.
+
+#>
+# === Define your certificate info ===
 $CertDownloadUrl = "https://xxxx.blob.core.windows.net/<blob name>/xxxxxCodeSigning_public.cer"  # Use full public or SAS URL
 $LocalCertPath = "$env:TEMP\xxxxxCodeSigning_public.cer"
 $ExpectedThumbprint = "xxxxxx"
